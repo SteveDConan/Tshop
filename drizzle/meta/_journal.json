@@ -1,0 +1,13 @@
+{
+  "version": "5",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1748672791890,
+      "tag": "0000_romantic_james_howlett",
+      "breakpoints": true
+    }
+  ]
+}
