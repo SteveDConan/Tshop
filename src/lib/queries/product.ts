@@ -56,18 +56,10 @@ export async function getProducts(input: SearchParams) {
 
   try {
     const search = getProductsSchema.parse(input)
+    console.log("Parsed search params:", search)
 
-    const limit = search.per_page
-    const offset = (search.page - 1) * limit
-
-    const [column, order] = (search.sort?.split(".") as [
-      keyof Product | undefined,
-      "asc" | "desc" | undefined,
-    ]) ?? ["createdAt", "desc"]
-    const [minPrice, maxPrice] = search.price_range?.split("-") ?? []
-    const categoryIds = search.categories?.split(".") ?? []
-    const subcategoryIds = search.subcategories?.split(".") ?? []
-    const storeIds = search.store_ids?.split(".") ?? []
+    const limit = search.per_page ?? 10
+    const offset = ((search.page ?? 1) - 1) * limit
 
     const transaction = await db.transaction(async (tx) => {
       const data = await tx
@@ -92,51 +84,19 @@ export async function getProducts(input: SearchParams) {
         .leftJoin(stores, eq(products.storeId, stores.id))
         .leftJoin(categories, eq(products.categoryId, categories.id))
         .leftJoin(subcategories, eq(products.subcategoryId, subcategories.id))
-        .where(
-          and(
-            categoryIds.length > 0
-              ? inArray(products.categoryId, categoryIds)
-              : undefined,
-            subcategoryIds.length > 0
-              ? inArray(products.subcategoryId, subcategoryIds)
-              : undefined,
-            minPrice ? gte(products.price, minPrice) : undefined,
-            maxPrice ? lte(products.price, maxPrice) : undefined,
-            storeIds.length ? inArray(products.storeId, storeIds) : undefined,
-            input.active === "true"
-              ? sql`(${stores.stripeAccountId}) is not null`
-              : undefined
-          )
-        )
-        .groupBy(products.id)
-        .orderBy(
-          column && column in products
-            ? order === "asc"
-              ? asc(products[column])
-              : desc(products[column])
-            : desc(products.createdAt)
-        )
+        .orderBy(desc(products.createdAt))
+
+      console.log("Raw query result:", data)
 
       const total = await tx
         .select({
           count: count(products.id),
         })
         .from(products)
-        .where(
-          and(
-            categoryIds.length > 0
-              ? inArray(products.categoryId, categoryIds)
-              : undefined,
-            subcategoryIds.length > 0
-              ? inArray(products.subcategoryId, subcategoryIds)
-              : undefined,
-            minPrice ? gte(products.price, minPrice) : undefined,
-            maxPrice ? lte(products.price, maxPrice) : undefined,
-            storeIds.length ? inArray(products.storeId, storeIds) : undefined
-          )
-        )
         .execute()
         .then((res) => res[0]?.count ?? 0)
+
+      console.log("Total products:", total)
 
       const pageCount = Math.ceil(total / limit)
 
@@ -148,6 +108,7 @@ export async function getProducts(input: SearchParams) {
 
     return transaction
   } catch (err) {
+    console.error("Error in getProducts:", err)
     return {
       data: [],
       pageCount: 0,

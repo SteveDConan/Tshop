@@ -11,6 +11,7 @@ import {
   PageHeaderHeading,
 } from "@/components/page-header"
 import { Shell } from "@/components/shell"
+import { Products } from "@/components/products"
 
 interface CategoryPageProps {
   params: {
@@ -43,7 +44,11 @@ export default async function CategoryPage({
           {`Buy ${category} from the best stores`}
         </PageHeaderDescription>
       </PageHeader>
-      <AlertCard />
+      {/* <AlertCard /> */}
+      <Products
+        products={productsTransaction.data}
+        pageCount={productsTransaction.pageCount}
+      />
     </Shell>
   )
 }

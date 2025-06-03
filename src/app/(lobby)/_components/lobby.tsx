@@ -41,7 +41,6 @@ export async function Lobby({
     categoriesPromise,
     storesPromise,
   ])
-
   return (
     <Shell className="max-w-6xl gap-0">
       <PageHeader

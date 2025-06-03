@@ -10,6 +10,7 @@ import {
   PageHeaderHeading,
 } from "@/components/page-header"
 import { Shell } from "@/components/shell"
+import { Products } from "@/components/products"
 
 export const metadata: Metadata = {
   metadataBase: new URL(env.NEXT_PUBLIC_APP_URL),
@@ -24,7 +25,11 @@ interface ProductsPageProps {
 export default async function ProductsPage({
   searchParams,
 }: ProductsPageProps) {
+  console.log("Search params:", searchParams)
   const productsTransaction = await getProducts(searchParams)
+  console.log("Products data:", productsTransaction)
+  console.log("Products count:", productsTransaction.data.length)
+  console.log("Page count:", productsTransaction.pageCount)
 
   return (
     <Shell>
@@ -34,7 +39,11 @@ export default async function ProductsPage({
           Buy products from our stores
         </PageHeaderDescription>
       </PageHeader>
-      <AlertCard />
+      {/* <AlertCard /> */}
+      <Products
+        products={productsTransaction.data}
+        pageCount={productsTransaction.pageCount}
+      />
     </Shell>
   )
 }
