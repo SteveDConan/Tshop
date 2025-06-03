@@ -18,7 +18,14 @@ interface CheckoutCardProps {
 }
 
 export async function CheckoutCard({ storeId }: CheckoutCardProps) {
+  console.log("CheckoutCard - storeId:", storeId)
   const cartLineItems = await getCart({ storeId })
+  console.log("CheckoutCard - cartLineItems:", cartLineItems)
+
+  if (!cartLineItems.length) {
+    console.log("CheckoutCard - No items found for store:", storeId)
+    return null
+  }
 
   return (
     <Card

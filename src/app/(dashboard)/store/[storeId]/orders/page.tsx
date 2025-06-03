@@ -12,6 +12,7 @@ import { ordersSearchParamsSchema } from "@/lib/validations/params"
 import { DataTableSkeleton } from "@/components/data-table/data-table-skeleton"
 import { DateRangePicker } from "@/components/date-range-picker"
 import { OrdersTable } from "@/components/tables/orders-table"
+import { ErrorBoundary } from "@/components/error-boundary"
 
 export const metadata: Metadata = {
   metadataBase: new URL(env.NEXT_PUBLIC_APP_URL),
@@ -34,6 +35,11 @@ export default async function OrdersPage({
 
   const { page, per_page, sort, customer, status, from, to } =
     ordersSearchParamsSchema.parse(searchParams)
+
+  // Validate date range
+  if (from && to && new Date(from) > new Date(to)) {
+    throw new Error("Invalid date range: 'from' date must be before 'to' date")
+  }
 
   const store = await db.query.stores.findFirst({
     where: eq(stores.id, storeId),
@@ -154,11 +160,15 @@ export default async function OrdersPage({
     <div className="space-y-6">
       <div className="flex flex-col gap-4 xs:flex-row xs:items-center xs:justify-between">
         <h2 className="text-2xl font-bold tracking-tight">Orders</h2>
-        <DateRangePicker align="end" />
+        <React.Suspense fallback={<div className="h-10 w-[200px] animate-pulse rounded-md bg-muted" />}>
+          <DateRangePicker align="end" />
+        </React.Suspense>
       </div>
-      <React.Suspense fallback={<DataTableSkeleton columnCount={6} />}>
-        <OrdersTable promise={ordersPromise} storeId={storeId} />
-      </React.Suspense>
+      <ErrorBoundary>
+        <React.Suspense fallback={<DataTableSkeleton columnCount={6} />}>
+          <OrdersTable promise={ordersPromise} storeId={storeId} />
+        </React.Suspense>
+      </ErrorBoundary>
     </div>
   )
 }

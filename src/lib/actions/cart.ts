@@ -21,9 +21,13 @@ export async function getCart(input?: {
   noStore()
 
   const cartId = cookies().get("cartId")?.value
-  console.log("Cart ID from cookie:", cartId)
+  console.log("getCart - cartId:", cartId)
+  console.log("getCart - input:", input)
 
-  if (!cartId) return []
+  if (!cartId) {
+    console.log("getCart - No cartId found in cookies")
+    return []
+  }
 
   try {
     const cart = await db.query.carts.findFirst({
@@ -32,21 +36,25 @@ export async function getCart(input?: {
       },
       where: eq(carts.id, cartId),
     })
-    console.log("Cart from database:", cart)
+    console.log("getCart - cart from database:", cart)
 
     const productIds = cart?.items?.map((item) => item.productId) ?? []
-    console.log("Product IDs from cart:", productIds)
+    console.log("getCart - productIds from cart:", productIds)
 
-    if (productIds.length === 0) return []
+    if (productIds.length === 0) {
+      console.log("getCart - No products found in cart")
+      return []
+    }
 
     const uniqueProductIds = [...new Set(productIds)]
-    console.log("Unique product IDs:", uniqueProductIds)
+    console.log("getCart - unique productIds:", uniqueProductIds)
 
     // First get the product IDs with their quantities
     const productQuantities = cart?.items?.reduce((acc, item) => {
       acc[item.productId] = item.quantity
       return acc
     }, {} as Record<string, number>) ?? {}
+    console.log("getCart - productQuantities:", productQuantities)
 
     // Then get the product details
     const cartLineItems = await db
@@ -75,17 +83,17 @@ export async function getCart(input?: {
       .orderBy(desc(stores.stripeAccountId), asc(products.createdAt))
       .execute()
       .then((items) => {
-        console.log("Products from database:", items)
+        console.log("getCart - products from database:", items)
         return items.map((item) => ({
           ...item,
           quantity: productQuantities[item.id] ?? 0,
         }))
       })
 
-    console.log("Final cart line items:", cartLineItems)
+    console.log("getCart - final cartLineItems:", cartLineItems)
     return cartLineItems
   } catch (err) {
-    console.error("Error in getCart:", err)
+    console.error("getCart - Error:", err)
     return []
   }
 }
@@ -94,24 +102,44 @@ export async function getUniqueStoreIds() {
   noStore()
 
   const cartId = cookies().get("cartId")?.value
+  console.log("getUniqueStoreIds - cartId:", cartId)
 
-  if (!cartId) return []
+  if (!cartId) {
+    console.log("getUniqueStoreIds - No cartId found in cookies")
+    return []
+  }
 
   try {
-    const cart = await db
+    // First get the cart items
+    const cart = await db.query.carts.findFirst({
+      columns: {
+        items: true,
+      },
+      where: eq(carts.id, cartId),
+    })
+    console.log("getUniqueStoreIds - cart:", cart)
+
+    if (!cart?.items?.length) {
+      console.log("getUniqueStoreIds - No items in cart")
+      return []
+    }
+
+    // Get unique product IDs from cart items
+    const productIds = [...new Set(cart.items.map(item => item.productId))]
+    console.log("getUniqueStoreIds - productIds:", productIds)
+
+    // Get store IDs for these products
+    const storeIds = await db
       .selectDistinct({ storeId: products.storeId })
-      .from(carts)
-      .leftJoin(
-        products,
-        sql`JSON_CONTAINS(carts.items, JSON_OBJECT('productId', products.id))`
-      )
-      .groupBy(products.storeId)
-      .where(eq(carts.id, cartId))
+      .from(products)
+      .where(inArray(products.id, productIds))
+      .execute()
+      .then(rows => rows.map(row => row.storeId).filter(Boolean))
 
-    const storeIds = cart.map((item) => item.storeId).filter((id) => id)
-
+    console.log("getUniqueStoreIds - storeIds:", storeIds)
     return storeIds
   } catch (err) {
+    console.error("getUniqueStoreIds - Error:", err)
     return []
   }
 }
@@ -170,8 +198,13 @@ export async function addToCart(rawInput: z.infer<typeof cartItemSchema>) {
         .returning({ insertedId: carts.id })
       console.log("Created new cart:", cart)
 
-      // Note: .set() is only available in a Server Action or Route Handler
-      cookieStore.set("cartId", String(cart[0]?.insertedId))
+      // Set cookie with 30 days expiration
+      cookieStore.set({
+        name: "cartId",
+        value: String(cart[0]?.insertedId),
+        expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+        path: "/",
+      })
       console.log("Set new cart ID in cookie:", cart[0]?.insertedId)
 
       revalidatePath("/")
@@ -213,7 +246,12 @@ export async function addToCart(rawInput: z.infer<typeof cartItemSchema>) {
         .returning({ insertedId: carts.id })
       console.log("Created new cart after closed:", newCart)
 
-      cookieStore.set("cartId", String(newCart[0]?.insertedId))
+      cookieStore.set({
+        name: "cartId",
+        value: String(newCart[0]?.insertedId),
+        expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+        path: "/",
+      })
       console.log("Set new cart ID in cookie after closed:", newCart[0]?.insertedId)
 
       revalidatePath("/")
@@ -241,6 +279,7 @@ export async function addToCart(rawInput: z.infer<typeof cartItemSchema>) {
         items: cart.items,
       })
       .where(eq(carts.id, cartId))
+
     console.log("Updated cart in database")
 
     revalidatePath("/")
