@@ -12,6 +12,7 @@ import { storesProductsSearchParamsSchema } from "@/lib/validations/params"
 import { DataTableSkeleton } from "@/components/data-table/data-table-skeleton"
 import { DateRangePicker } from "@/components/date-range-picker"
 import { ProductsTable } from "@/components/tables/products-table"
+import { getCategories } from "@/lib/queries/product"
 
 export const metadata: Metadata = {
   metadataBase: new URL(env.NEXT_PUBLIC_APP_URL),
@@ -73,6 +74,7 @@ export default async function ProductsPage({
         .select({
           id: products.id,
           name: products.name,
+          categoryId: products.categoryId,
           category: categories.name,
           price: products.price,
           inventory: products.inventory,
@@ -149,15 +151,21 @@ export default async function ProductsPage({
     }
   })
 
+  const categoriesPromise = getCategories()
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 xs:flex-row xs:items-center xs:justify-between">
         <h2 className="text-2xl font-bold tracking-tight">Products</h2>
         <DateRangePicker align="end" />
       </div>
-      {/* <React.Suspense fallback={<DataTableSkeleton columnCount={6} />}>
-        <ProductsTable promise={productsPromise} storeId={storeId} />
-      </React.Suspense> */}
+      <React.Suspense fallback={<DataTableSkeleton columnCount={6} />}>
+        <ProductsTable 
+          promise={productsPromise} 
+          categoriesPromise={categoriesPromise}
+          storeId={storeId} 
+        />
+      </React.Suspense>
     </div>
   )
 }
