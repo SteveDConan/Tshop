@@ -91,6 +91,8 @@ export function ProductCard({
 
                 if (error) {
                   toast.error(error)
+                } else {
+                  toast.success("Added to cart")
                 }
               }}
               disabled={isUpdatePending}

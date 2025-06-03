@@ -18,16 +18,19 @@ import { Icons } from "@/components/icons"
 
 export async function CartSheet() {
   const cartLineItems = await getCart()
+  console.log("CartSheet - cartLineItems:", cartLineItems)
 
   const itemCount = cartLineItems.reduce(
     (total, item) => total + Number(item.quantity),
     0
   )
+  console.log("CartSheet - itemCount:", itemCount)
 
   const cartTotal = cartLineItems.reduce(
     (total, item) => total + item.quantity * Number(item.price),
     0
   )
+  console.log("CartSheet - cartTotal:", cartTotal)
 
   return (
     <Sheet>
@@ -98,21 +101,19 @@ export async function CartSheet() {
             <div className="text-xl font-medium text-muted-foreground">
               Your cart is empty
             </div>
-            <SheetTrigger asChild>
-              <Link
-                aria-label="Add items to your cart to checkout"
-                href="/products"
-                className={cn(
-                  buttonVariants({
-                    variant: "link",
-                    size: "sm",
-                    className: "text-sm text-muted-foreground",
-                  })
-                )}
-              >
-                Add items to your cart to checkout
-              </Link>
-            </SheetTrigger>
+            <Link
+              aria-label="Add items to your cart to checkout"
+              href="/products"
+              className={cn(
+                buttonVariants({
+                  variant: "link",
+                  size: "sm",
+                  className: "text-sm text-muted-foreground",
+                })
+              )}
+            >
+              Add items to your cart to checkout
+            </Link>
           </div>
         )}
       </SheetContent>

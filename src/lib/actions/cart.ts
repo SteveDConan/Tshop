@@ -21,6 +21,7 @@ export async function getCart(input?: {
   noStore()
 
   const cartId = cookies().get("cartId")?.value
+  console.log("Cart ID from cookie:", cartId)
 
   if (!cartId) return []
 
@@ -31,13 +32,23 @@ export async function getCart(input?: {
       },
       where: eq(carts.id, cartId),
     })
+    console.log("Cart from database:", cart)
 
     const productIds = cart?.items?.map((item) => item.productId) ?? []
+    console.log("Product IDs from cart:", productIds)
 
     if (productIds.length === 0) return []
 
     const uniqueProductIds = [...new Set(productIds)]
+    console.log("Unique product IDs:", uniqueProductIds)
 
+    // First get the product IDs with their quantities
+    const productQuantities = cart?.items?.reduce((acc, item) => {
+      acc[item.productId] = item.quantity
+      return acc
+    }, {} as Record<string, number>) ?? {}
+
+    // Then get the product details
     const cartLineItems = await db
       .select({
         id: products.id,
@@ -61,24 +72,20 @@ export async function getCart(input?: {
           input?.storeId ? eq(products.storeId, input.storeId) : undefined
         )
       )
-      .groupBy(products.id)
       .orderBy(desc(stores.stripeAccountId), asc(products.createdAt))
       .execute()
       .then((items) => {
-        return items.map((item) => {
-          const quantity = cart?.items?.find(
-            (cartItem) => cartItem.productId === item.id
-          )?.quantity
-
-          return {
-            ...item,
-            quantity: quantity ?? 0,
-          }
-        })
+        console.log("Products from database:", items)
+        return items.map((item) => ({
+          ...item,
+          quantity: productQuantities[item.id] ?? 0,
+        }))
       })
 
+    console.log("Final cart line items:", cartLineItems)
     return cartLineItems
   } catch (err) {
+    console.error("Error in getCart:", err)
     return []
   }
 }
@@ -130,6 +137,7 @@ export async function addToCart(rawInput: z.infer<typeof cartItemSchema>) {
 
   try {
     const input = cartItemSchema.parse(rawInput)
+    console.log("Adding to cart input:", input)
 
     // Checking if product is in stock
     const product = await db.query.products.findFirst({
@@ -138,6 +146,7 @@ export async function addToCart(rawInput: z.infer<typeof cartItemSchema>) {
       },
       where: eq(products.id, input.productId),
     })
+    console.log("Product from database:", product)
 
     if (!product) {
       throw new Error("Product not found, please try again.")
@@ -149,17 +158,21 @@ export async function addToCart(rawInput: z.infer<typeof cartItemSchema>) {
 
     const cookieStore = cookies()
     const cartId = cookieStore.get("cartId")?.value
+    console.log("Current cart ID:", cartId)
 
     if (!cartId) {
+      console.log("No cart ID found, creating new cart")
       const cart = await db
         .insert(carts)
         .values({
           items: [input],
         })
         .returning({ insertedId: carts.id })
+      console.log("Created new cart:", cart)
 
       // Note: .set() is only available in a Server Action or Route Handler
       cookieStore.set("cartId", String(cart[0]?.insertedId))
+      console.log("Set new cart ID in cookie:", cart[0]?.insertedId)
 
       revalidatePath("/")
       return {
@@ -171,9 +184,11 @@ export async function addToCart(rawInput: z.infer<typeof cartItemSchema>) {
     const cart = await db.query.carts.findFirst({
       where: eq(carts.id, cartId),
     })
+    console.log("Existing cart:", cart)
 
     // TODO: Find a better way to deal with expired carts
     if (!cart) {
+      console.log("Cart not found, clearing cookie and creating new cart")
       cookieStore.set({
         name: "cartId",
         value: "",
@@ -187,6 +202,7 @@ export async function addToCart(rawInput: z.infer<typeof cartItemSchema>) {
 
     // If cart is closed, delete it and create a new one
     if (cart.closed) {
+      console.log("Cart is closed, creating new cart")
       await db.delete(carts).where(eq(carts.id, cartId))
 
       const newCart = await db
@@ -195,8 +211,10 @@ export async function addToCart(rawInput: z.infer<typeof cartItemSchema>) {
           items: [input],
         })
         .returning({ insertedId: carts.id })
+      console.log("Created new cart after closed:", newCart)
 
       cookieStore.set("cartId", String(newCart[0]?.insertedId))
+      console.log("Set new cart ID in cookie after closed:", newCart[0]?.insertedId)
 
       revalidatePath("/")
       return {
@@ -208,12 +226,14 @@ export async function addToCart(rawInput: z.infer<typeof cartItemSchema>) {
     const cartItem = cart.items?.find(
       (item) => item.productId === input.productId
     )
+    console.log("Existing cart item:", cartItem)
 
     if (cartItem) {
       cartItem.quantity += input.quantity
     } else {
       cart.items?.push(input)
     }
+    console.log("Updated cart items:", cart.items)
 
     await db
       .update(carts)
@@ -221,6 +241,7 @@ export async function addToCart(rawInput: z.infer<typeof cartItemSchema>) {
         items: cart.items,
       })
       .where(eq(carts.id, cartId))
+    console.log("Updated cart in database")
 
     revalidatePath("/")
 
@@ -229,6 +250,7 @@ export async function addToCart(rawInput: z.infer<typeof cartItemSchema>) {
       error: null,
     }
   } catch (err) {
+    console.error("Error in addToCart:", err)
     return {
       data: null,
       error: getErrorMessage(err),
