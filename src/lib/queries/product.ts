@@ -68,22 +68,22 @@ export async function getProducts(input: SearchParams) {
           name: products.name,
           description: products.description,
           images: products.images,
-          category: categories.name,
-          subcategory: subcategories.name,
+          categoryId: products.categoryId,
+          subcategoryId: products.subcategoryId,
           price: products.price,
+          originalPrice: products.originalPrice,
           inventory: products.inventory,
           rating: products.rating,
+          status: products.status,
           storeId: products.storeId,
           createdAt: products.createdAt,
           updatedAt: products.updatedAt,
-          stripeAccountId: stores.stripeAccountId,
+          category: categories.name,
         })
         .from(products)
+        .leftJoin(categories, eq(products.categoryId, categories.id))
         .limit(limit)
         .offset(offset)
-        .leftJoin(stores, eq(products.storeId, stores.id))
-        .leftJoin(categories, eq(products.categoryId, categories.id))
-        .leftJoin(subcategories, eq(products.subcategoryId, subcategories.id))
         .orderBy(desc(products.createdAt))
 
       console.log("Raw query result:", data)
