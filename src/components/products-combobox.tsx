@@ -39,15 +39,25 @@ export function ProductsCombobox() {
     }
 
     async function fetchData() {
-      setLoading(true)
-      const { data, error } = await filterProducts({ query: debouncedQuery })
+      try {
+        setLoading(true)
+        console.log("Fetching data for query:", debouncedQuery)
+        const { data, error } = await filterProducts({ query: debouncedQuery })
+        console.log("Received data:", data)
+        console.log("Error if any:", error)
 
-      if (error) {
+        if (error) {
+          console.error("Error fetching products:", error)
+          setLoading(false)
+          return
+        }
+
+        setData(data)
+      } catch (err) {
+        console.error("Error in fetchData:", err)
+      } finally {
         setLoading(false)
-        return
       }
-      setData(data)
-      setLoading(false)
     }
 
     void fetchData()

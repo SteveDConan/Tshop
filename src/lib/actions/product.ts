@@ -17,6 +17,8 @@ import {
 export async function filterProducts({ query }: { query: string }) {
   noStore()
   try {
+    console.log("Searching for query:", query)
+    
     if (query.length === 0) {
       return {
         data: null,
@@ -24,6 +26,29 @@ export async function filterProducts({ query }: { query: string }) {
       }
     }
 
+    // Search for products that match the query
+    const matchingProducts = await db.query.products.findMany({
+      columns: {
+        id: true,
+        name: true,
+        categoryId: true,
+      },
+      where: (table, { sql }) => sql`LOWER(${table.name}) LIKE LOWER(${'%' + query + '%'})`,
+    })
+
+    console.log("Matching products:", matchingProducts)
+
+    if (matchingProducts.length === 0) {
+      return {
+        data: [],
+        error: null,
+      }
+    }
+
+    // Get unique category IDs from matching products
+    const categoryIds = [...new Set(matchingProducts.map(p => p.categoryId))]
+
+    // Get categories with their matching products
     const categoriesWithProducts = await db.query.categories.findMany({
       columns: {
         id: true,
@@ -35,17 +60,25 @@ export async function filterProducts({ query }: { query: string }) {
             id: true,
             name: true,
           },
+          where: (table, { sql }) => sql`LOWER(${table.name}) LIKE LOWER(${'%' + query + '%'})`,
         },
       },
-      // This doesn't do anything
-      where: (table, { sql }) => sql`position(${query} in ${table.name}) > 0`,
+      where: (table, { inArray }) => inArray(table.id, categoryIds),
     })
 
+    console.log("Categories with products:", categoriesWithProducts)
+
+    // Filter out categories that have no matching products
+    const filteredCategories = categoriesWithProducts.filter(
+      (category) => category.products.length > 0
+    )
+
     return {
-      data: categoriesWithProducts,
+      data: filteredCategories,
       error: null,
     }
   } catch (err) {
+    console.error("Error in filterProducts:", err)
     return {
       data: null,
       error: getErrorMessage(err),
