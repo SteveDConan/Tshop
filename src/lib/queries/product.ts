@@ -62,6 +62,56 @@ export async function getProducts(input: SearchParams) {
     const offset = ((search.page ?? 1) - 1) * limit
 
     const transaction = await db.transaction(async (tx) => {
+      // Build where conditions
+      const whereConditions = []
+      
+      // Add category filter if category slug is provided
+      if (search.categories) {
+        const categorySlugs = search.categories.split('.')
+        whereConditions.push(
+          inArray(
+            categories.slug,
+            categorySlugs
+          )
+        )
+      }
+
+      // Add subcategory filter if provided
+      if (search.subcategories) {
+        const subcategoryIds = search.subcategories.split('.')
+        whereConditions.push(
+          inArray(
+            products.subcategoryId,
+            subcategoryIds
+          )
+        )
+      }
+
+      // Add price range filter if provided
+      if (search.price_range) {
+        const [min, max] = search.price_range.split('.')
+        if (min) {
+          whereConditions.push(gte(products.price, min))
+        }
+        if (max) {
+          whereConditions.push(lte(products.price, max))
+        }
+      }
+
+      // Add store filter if provided
+      if (search.store_ids) {
+        const storeIds = search.store_ids.split('.')
+        whereConditions.push(
+          inArray(
+            products.storeId,
+            storeIds
+          )
+        )
+      }
+
+      // Add active filter
+      whereConditions.push(eq(products.status, 'active'))
+
       const data = await tx
         .select({
           id: products.id,
@@ -82,6 +132,7 @@ export async function getProducts(input: SearchParams) {
         })
         .from(products)
         .leftJoin(categories, eq(products.categoryId, categories.id))
+        .where(and(...whereConditions))
         .limit(limit)
         .offset(offset)
         .orderBy(desc(products.createdAt))
@@ -93,6 +144,8 @@ export async function getProducts(input: SearchParams) {
           count: count(products.id),
         })
         .from(products)
+        .leftJoin(categories, eq(products.categoryId, categories.id))
+        .where(and(...whereConditions))
         .execute()
         .then((res) => res[0]?.count ?? 0)
 

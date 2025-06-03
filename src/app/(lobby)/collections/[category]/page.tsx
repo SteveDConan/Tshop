@@ -34,7 +34,10 @@ export default async function CategoryPage({
 }: CategoryPageProps) {
   const category = decodeURIComponent(params.category)
 
-  const productsTransaction = await getProducts(searchParams)
+  const productsTransaction = await getProducts({
+    ...searchParams,
+    categories: category
+  })
 
   return (
     <Shell>
