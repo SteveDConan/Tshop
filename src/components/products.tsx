@@ -111,19 +111,17 @@ export function Products({
     startTransition(() => {
       const newQueryString = createQueryString({
         price_range: `${min}-${max}`,
+        page: 1, // Reset to first page when filter changes
       })
 
       router.push(`${pathname}?${newQueryString}`, {
         scroll: false,
       })
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedPrice])
+  }, [debouncedPrice, createQueryString, pathname, router])
 
   // Category filter
-  const [selectedCategories, setSelectedCategories] = React.useState<
-    Option[] | null
-  >(
+  const [selectedCategories, setSelectedCategories] = React.useState<Option[] | null>(
     categoriesParam
       ? categoriesParam.split(".").map((c) => ({
           label: toTitleCase(c),
@@ -136,22 +134,19 @@ export function Products({
     startTransition(() => {
       const newQueryString = createQueryString({
         categories: selectedCategories?.length
-          ? // Join categories with a dot to make search params prettier
-            selectedCategories.map((c) => c.value).join(".")
+          ? selectedCategories.map((c) => c.value).join(".")
           : null,
+        page: 1, // Reset to first page when filter changes
       })
 
       router.push(`${pathname}?${newQueryString}`, {
         scroll: false,
       })
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCategories])
+  }, [selectedCategories, createQueryString, pathname, router])
 
   // Subcategory filter
-  const [selectedSubcategories, setSelectedSubcategories] = React.useState<
-    Option[] | null
-  >(
+  const [selectedSubcategories, setSelectedSubcategories] = React.useState<Option[] | null>(
     subcategoriesParam
       ? subcategoriesParam.split(".").map((c) => ({
           label: toTitleCase(c),
@@ -166,14 +161,14 @@ export function Products({
         subcategories: selectedSubcategories?.length
           ? selectedSubcategories.map((s) => s.value).join(".")
           : null,
+        page: 1, // Reset to first page when filter changes
       })
 
       router.push(`${pathname}?${newQueryString}`, {
         scroll: false,
       })
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSubcategories])
+  }, [selectedSubcategories, createQueryString, pathname, router])
 
   // Store filter
   const [storeIds, setStoreIds] = React.useState<string[] | null>(
@@ -184,14 +179,28 @@ export function Products({
     startTransition(() => {
       const newQueryString = createQueryString({
         store_ids: storeIds?.length ? storeIds.join(".") : null,
+        page: 1, // Reset to first page when filter changes
       })
 
       router.push(`${pathname}?${newQueryString}`, {
         scroll: false,
       })
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeIds])
+  }, [storeIds, createQueryString, pathname, router])
+
+  // Sort handler
+  const handleSort = React.useCallback((value: string) => {
+    startTransition(() => {
+      const newQueryString = createQueryString({
+        sort: value,
+        page: 1, // Reset to first page when sort changes
+      })
+
+      router.push(`${pathname}?${newQueryString}`, {
+        scroll: false,
+      })
+    })
+  }, [createQueryString, pathname, router])
 
   return (
     <section className="flex flex-col space-y-6">
@@ -223,6 +232,7 @@ export function Products({
                       router.push(
                         `${pathname}?${createQueryString({
                           active: value ? "true" : "false",
+                          page: 1, // Reset to first page when filter changes
                         })}`,
                         {
                           scroll: false,
@@ -414,18 +424,19 @@ export function Products({
                     startTransition(() => {
                       router.push(
                         `${pathname}?${createQueryString({
-                          price_range: 0 - 100,
+                          price_range: null,
                           store_ids: null,
                           categories: null,
                           subcategories: null,
                           active: "true",
+                          page: 1,
                         })}`,
                         {
                           scroll: false,
                         }
                       )
 
-                      setPriceRange([0, 100])
+                      setPriceRange([0, 500])
                       setSelectedCategories(null)
                       setSelectedSubcategories(null)
                       setStoreIds(null)
@@ -453,18 +464,7 @@ export function Products({
               <DropdownMenuItem
                 key={option.label}
                 className={cn(option.value === sort && "bg-accent font-bold")}
-                onClick={() => {
-                  startTransition(() => {
-                    router.push(
-                      `${pathname}?${createQueryString({
-                        sort: option.value,
-                      })}`,
-                      {
-                        scroll: false,
-                      }
-                    )
-                  })
-                }}
+                onClick={() => handleSort(option.value)}
               >
                 {option.label}
               </DropdownMenuItem>

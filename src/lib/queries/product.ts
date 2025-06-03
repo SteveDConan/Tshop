@@ -89,12 +89,15 @@ export async function getProducts(input: SearchParams) {
 
       // Add price range filter if provided
       if (search.price_range) {
-        const [min, max] = search.price_range.split('.')
-        if (min) {
-          whereConditions.push(gte(products.price, min))
+        const [minStr, maxStr] = search.price_range.split('-')
+        const min = minStr ? parseFloat(minStr) : undefined
+        const max = maxStr ? parseFloat(maxStr) : undefined
+        
+        if (min !== undefined) {
+          whereConditions.push(gte(products.price, min.toString()))
         }
-        if (max) {
-          whereConditions.push(lte(products.price, max))
+        if (max !== undefined) {
+          whereConditions.push(lte(products.price, max.toString()))
         }
       }
 
@@ -111,6 +114,14 @@ export async function getProducts(input: SearchParams) {
 
       // Add active filter
       whereConditions.push(eq(products.status, 'active'))
+
+      // Handle sorting
+      const [sortField, sortOrder] = (search.sort ?? 'createdAt.desc').split('.')
+      const orderBy = sortOrder === 'asc' ? asc : desc
+      const sortColumn = sortField === 'price' ? products.price :
+                        sortField === 'name' ? products.name :
+                        sortField === 'rating' ? products.rating :
+                        products.createdAt
 
       const data = await tx
         .select({
@@ -135,7 +146,7 @@ export async function getProducts(input: SearchParams) {
         .where(and(...whereConditions))
         .limit(limit)
         .offset(offset)
-        .orderBy(desc(products.createdAt))
+        .orderBy(orderBy(sortColumn))
 
       console.log("Raw query result:", data)
 
@@ -154,7 +165,10 @@ export async function getProducts(input: SearchParams) {
       const pageCount = Math.ceil(total / limit)
 
       return {
-        data,
+        data: data.map(product => ({
+          ...product,
+          category: product.category ?? null
+        })),
         pageCount,
       }
     })
