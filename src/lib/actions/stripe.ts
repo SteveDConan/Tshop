@@ -454,6 +454,13 @@ export async function createAccountLink(
       try {
         const account = await stripe.accounts.create({ 
           type: "standard",
+          country: "US",
+          email: "test@example.com", // Thay thế bằng email thực tế
+          business_type: "individual",
+          capabilities: {
+            card_payments: { requested: true },
+            transfers: { requested: true },
+          },
           metadata: {
             storeId: input.storeId,
             userId: userId
