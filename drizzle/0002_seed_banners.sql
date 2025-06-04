@@ -1,0 +1,5 @@
+INSERT INTO "banners" ("id", "title", "description", "image_url", "link", "is_active", "start_date", "end_date", "created_at", "updated_at")
+VALUES
+  ('banner_1', 'Summer Sale', 'Get up to 50% off on selected items', 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da', '/products?category=summer', true, '2024-03-01 00:00:00', '2024-08-31 23:59:59', NOW(), NOW()),
+  ('banner_2', 'New Arrivals', 'Check out our latest collection', 'https://images.unsplash.com/photo-1607082349566-187342175e2f', '/products?sort=newest', true, '2024-03-01 00:00:00', '2024-12-31 23:59:59', NOW(), NOW()),
+  ('banner_3', 'Special Offer', 'Free shipping on orders over $50', 'https://images.unsplash.com/photo-1607082349566-187342175e2f', '/products', true, '2024-03-01 00:00:00', '2024-12-31 23:59:59', NOW(), NOW()); 
