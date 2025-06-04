@@ -2,7 +2,7 @@ import * as React from "react"
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { db } from "@/db"
-import { orders, stores } from "@/db/schema"
+import { customers, stores } from "@/db/schema"
 import { env } from "@/env.js"
 import type { SearchParams } from "@/types"
 import { and, asc, desc, eq, gte, like, lte, sql } from "drizzle-orm"
@@ -57,86 +57,65 @@ export default async function CustomersPage({
   const fromDay = from ? new Date(from) : undefined
   const toDay = to ? new Date(to) : undefined
 
-  const ordersPromise = db.transaction(async (tx) => {
+  const customersPromise = db.transaction(async (tx) => {
     const data = await db
       .select({
-        name: orders.name,
-        email: orders.email,
-        orderPlaced: sql<number>`count(*)`,
-        totalSpent: sql<number>`sum(${orders.amount})`,
-        createdAt: sql<string>`min(${orders.createdAt})`,
+        name: customers.name,
+        email: customers.email,
+        createdAt: customers.createdAt,
       })
-      .from(orders)
+      .from(customers)
       .limit(limit)
       .offset(offset)
       .where(
         and(
-          eq(orders.storeId, storeId),
+          eq(customers.storeId, storeId),
           // Filter by email
-          email ? like(orders.email, `%${email}%`) : undefined,
+          email ? like(customers.email, `%${email}%`) : undefined,
           // Filter by createdAt
           fromDay && toDay
-            ? and(gte(orders.createdAt, fromDay), lte(orders.createdAt, toDay))
+            ? and(gte(customers.createdAt, fromDay), lte(customers.createdAt, toDay))
             : undefined
         )
       )
-      .groupBy(orders.email, orders.name)
       .orderBy(
         sort === "name.asc"
-          ? asc(orders.name)
+          ? asc(customers.name)
           : sort === "name.desc"
-            ? desc(orders.name)
+            ? desc(customers.name)
             : sort === "email.asc"
-              ? asc(orders.email)
+              ? asc(customers.email)
               : sort === "email.desc"
-                ? desc(orders.email)
-                : sort === "totalSpent.asc"
-                  ? asc(sql<number>`sum(${orders.amount})`)
-                  : sort === "totalSpent.desc"
-                    ? desc(sql<number>`sum(${orders.amount})`)
-                    : sort === "orderPlaced.asc"
-                      ? asc(sql<number>`count(*)`)
-                      : sort === "orderPlaced.desc"
-                        ? desc(sql<number>`count(*)`)
-                        : sort === "createdAt.asc"
-                          ? asc(sql<string>`min(${orders.createdAt})`)
-                          : sort === "createdAt.desc"
-                            ? desc(sql<string>`min(${orders.createdAt})`)
-                            : sql<string>`min(${orders.createdAt})`
+                ? desc(customers.email)
+                : sort === "createdAt.asc"
+                  ? asc(customers.createdAt)
+                  : sort === "createdAt.desc"
+                    ? desc(customers.createdAt)
+                    : desc(customers.createdAt)
       )
-
-    const altCount = await db
-      .select({
-        count: sql<number>`count(*)`,
-      })
-      .from(orders)
-      .where(eq(orders.storeId, storeId))
-      .execute()
-      .then((res) => res[0]?.count ?? 0)
 
     const count = await tx
       .select({
         count: sql<number>`count(*)`,
       })
-      .from(orders)
+      .from(customers)
       .where(
         and(
-          eq(orders.storeId, storeId),
+          eq(customers.storeId, storeId),
           // Filter by email
-          email ? like(orders.email, `%${email}%`) : undefined,
+          email ? like(customers.email, `%${email}%`) : undefined,
           // Filter by createdAt
           fromDay && toDay
-            ? and(gte(orders.createdAt, fromDay), lte(orders.createdAt, toDay))
+            ? and(gte(customers.createdAt, fromDay), lte(customers.createdAt, toDay))
             : undefined
         )
       )
-      .groupBy(orders.email, orders.name)
       .execute()
       .then((res) => res[0]?.count ?? 0)
 
     return {
       data,
-      pageCount: Math.ceil((altCount - count) / limit),
+      pageCount: Math.ceil(count / limit),
     }
   })
 
@@ -148,10 +127,10 @@ export default async function CustomersPage({
       </div>
       <React.Suspense
         fallback={
-          <DataTableSkeleton columnCount={5} filterableColumnCount={0} />
+          <DataTableSkeleton columnCount={3} filterableColumnCount={0} />
         }
       >
-        <CustomersTable promise={ordersPromise} storeId={store.id} />
+        <CustomersTable promise={customersPromise} storeId={store.id} />
       </React.Suspense>
     </div>
   )

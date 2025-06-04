@@ -15,13 +15,12 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { DataTable } from "@/components/data-table/data-table"
 import { DataTableColumnHeader } from "@/components/data-table/data-table-column-header"
+import { useDataTable } from "@/hooks/use-data-table"
 
 interface AwaitedCustomer {
   email: string | null
   name: string | null
-  orderPlaced: number
-  totalSpent: number
-  createdAt: string
+  createdAt: Date
 }
 
 interface CustomersTableProps {
@@ -107,18 +106,22 @@ export function CustomersTable({ promise, storeId }: CustomersTableProps) {
     [storeId]
   )
 
-  return null
+  const { table } = useDataTable({
+    data,
+    columns,
+    pageCount,
+    filterFields: [
+      {
+        label: "Email",
+        value: "email",
+        placeholder: "Search emails...",
+      },
+    ],
+  })
 
-  // return (
-  //   <DataTable
-  //     data={data}
-  //     pageCount={pageCount}
-  //     searchableColumns={[
-  //       {
-  //         id: "email",
-  //         title: "emails",
-  //       },
-  //     ]}
-  //   />
-  // )
+  return (
+    <DataTable
+      table={table}
+    />
+  )
 }
