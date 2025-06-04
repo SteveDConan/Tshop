@@ -75,6 +75,7 @@ export default async function OrdersPage({
   noStore()
   const ordersPromise = db.transaction(async (tx) => {
     try {
+      console.log("Fetching orders for storeId:", storeId)
       const data = await tx
         .select({
           id: orders.id,
@@ -115,6 +116,8 @@ export default async function OrdersPage({
             : desc(orders.createdAt)
         )
 
+      console.log("Fetched orders data:", data)
+
       const count = await tx
         .select({
           count: sql<number>`count(*)`,
@@ -141,6 +144,8 @@ export default async function OrdersPage({
         .execute()
         .then((res) => res[0]?.count ?? 0)
 
+      console.log("Total orders count:", count)
+
       const pageCount = Math.ceil(count / limit)
 
       return {
@@ -148,7 +153,7 @@ export default async function OrdersPage({
         pageCount,
       }
     } catch (err) {
-      console.error(err)
+      console.error("Error fetching orders:", err)
       return {
         data: [],
         pageCount: 0,
