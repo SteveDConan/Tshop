@@ -18,29 +18,40 @@ export function ConnectStoreToStripeButton({
   ...props
 }: ConnectToStripeButtonProps) {
   const [loading, setLoading] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+
+  const handleConnect = async () => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      const { data, error } = await createAccountLink({ storeId })
+
+      if (error) {
+        setError(error)
+        toast.error(error)
+        return
+      }
+
+      if (data?.url) {
+        window.location.href = data.url
+      } else {
+        throw new Error("Failed to get Stripe account link URL")
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "An error occurred while connecting to Stripe"
+      setError(errorMessage)
+      toast.error(errorMessage)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <Button
       aria-label="Connect to Stripe"
       className={cn(className)}
-      onClick={async () => {
-        setLoading(true)
-
-        try {
-          const { data, error } = await createAccountLink({ storeId })
-
-          if (error) {
-            toast.error(error)
-            return
-          }
-
-          if (data) {
-            window.location.href = data.url
-          }
-        } finally {
-          setLoading(false)
-        }
-      }}
+      onClick={handleConnect}
       disabled={loading}
       {...props}
     >
@@ -50,7 +61,7 @@ export function ConnectStoreToStripeButton({
           aria-hidden="true"
         />
       )}
-      Connect to Stripe
+      {error ? "Retry Connection" : "Connect to Stripe"}
     </Button>
   )
 }

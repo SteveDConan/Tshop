@@ -13,6 +13,7 @@ import { addDays } from "date-fns"
 import { eq } from "drizzle-orm"
 import type Stripe from "stripe"
 import { type z } from "zod"
+import { auth } from "@clerk/nextjs/server"
 
 import { pricingConfig } from "@/config/pricing"
 import { calculateOrderAmount } from "@/lib/checkout"
@@ -145,7 +146,10 @@ export async function getStripeAccount(
       where: eq(stores.id, input.storeId),
     })
 
-    if (!store) return falsyReturn
+    if (!store) {
+      console.error("Store not found:", input.storeId)
+      return falsyReturn
+    }
 
     const payment = await db.query.payments.findFirst({
       columns: {
@@ -155,47 +159,60 @@ export async function getStripeAccount(
       where: eq(payments.storeId, input.storeId),
     })
 
-    if (!payment || !payment.stripeAccountId) return falsyReturn
+    if (!payment || !payment.stripeAccountId) {
+      console.error("Payment record not found or missing stripeAccountId:", input.storeId)
+      return falsyReturn
+    }
 
-    if (!retrieveAccount)
+    if (!retrieveAccount) {
       return {
         isConnected: true,
         account: null,
         payment,
       }
-
-    const account = await stripe.accounts.retrieve(payment.stripeAccountId)
-
-    if (!account) return falsyReturn
-
-    // If the account details have been submitted, we update the store and payment records
-    if (account.details_submitted && !payment.detailsSubmitted) {
-      await db.transaction(async (tx) => {
-        await tx
-          .update(payments)
-          .set({
-            detailsSubmitted: account.details_submitted,
-            stripeAccountCreatedAt: account.created
-              ? new Date(account.created * 1000)
-              : null,
-          })
-          .where(eq(payments.storeId, input.storeId))
-
-        await tx
-          .update(stores)
-          .set({
-            stripeAccountId: account.id,
-          })
-          .where(eq(stores.id, input.storeId))
-      })
     }
 
-    return {
-      isConnected: payment.detailsSubmitted,
-      account: account.details_submitted ? account : null,
-      payment,
+    try {
+      const account = await stripe.accounts.retrieve(payment.stripeAccountId)
+
+      if (!account) {
+        console.error("Stripe account not found:", payment.stripeAccountId)
+        return falsyReturn
+      }
+
+      // If the account details have been submitted, we update the store and payment records
+      if (account.details_submitted && !payment.detailsSubmitted) {
+        await db.transaction(async (tx) => {
+          await tx
+            .update(payments)
+            .set({
+              detailsSubmitted: account.details_submitted,
+              stripeAccountCreatedAt: account.created
+                ? new Date(account.created * 1000)
+                : null,
+            })
+            .where(eq(payments.storeId, input.storeId))
+
+          await tx
+            .update(stores)
+            .set({
+              stripeAccountId: account.id,
+            })
+            .where(eq(stores.id, input.storeId))
+        })
+      }
+
+      return {
+        isConnected: payment.detailsSubmitted,
+        account: account.details_submitted ? account : null,
+        payment,
+      }
+    } catch (stripeError) {
+      console.error("Error retrieving Stripe account:", stripeError)
+      return falsyReturn
     }
   } catch (err) {
+    console.error("Error in getStripeAccount:", err)
     return falsyReturn
   }
 }
@@ -372,60 +389,101 @@ export async function createAccountLink(
   noStore()
 
   try {
+    // Check if store exists
+    const store = await db.query.stores.findFirst({
+      columns: {
+        id: true,
+        userId: true,
+      },
+      where: eq(stores.id, input.storeId),
+    })
+
+    if (!store) {
+      throw new Error("Store not found")
+    }
+
+    // Check if user has access to store
+    const { userId } = auth()
+    if (!userId || store.userId !== userId) {
+      throw new Error("Unauthorized access to store")
+    }
+
     const { isConnected, payment, account } = await getStripeAccount(input)
 
     if (isConnected) {
-      throw new Error("Store already connected to Stripe.")
+      throw new Error("Store already connected to Stripe")
     }
 
     // Delete the existing account if details have not been submitted
     if (account && !account.details_submitted) {
-      await stripe.accounts.del(account.id)
+      try {
+        await stripe.accounts.del(account.id)
+      } catch (deleteError) {
+        console.error("Error deleting existing Stripe account:", deleteError)
+        // Continue with creating new account even if deletion fails
+      }
     }
 
     const stripeAccountId =
       payment?.stripeAccountId ?? (await createStripeAccount())
 
-    const accountLink = await stripe.accountLinks.create({
-      account: stripeAccountId,
-      refresh_url: absoluteUrl(`/store/${input.storeId}`),
-      return_url: absoluteUrl(`/store/${input.storeId}`),
-      type: "account_onboarding",
-    })
+    try {
+      const accountLink = await stripe.accountLinks.create({
+        account: stripeAccountId,
+        refresh_url: absoluteUrl(`/store/${input.storeId}`),
+        return_url: absoluteUrl(`/store/${input.storeId}`),
+        type: "account_onboarding",
+      })
 
-    if (!accountLink?.url) {
-      throw new Error("Error creating Stripe account link, please try again.")
-    }
+      if (!accountLink?.url) {
+        throw new Error("Failed to create Stripe account link")
+      }
 
-    return {
-      data: {
-        url: accountLink.url,
-      },
-      error: null,
+      return {
+        data: {
+          url: accountLink.url,
+        },
+        error: null,
+      }
+    } catch (accountLinkError) {
+      console.error("Error creating Stripe account link:", accountLinkError)
+      throw new Error("Failed to create Stripe account link")
     }
 
     async function createStripeAccount(): Promise<string> {
-      const account = await stripe.accounts.create({ type: "standard" })
-
-      if (!account) {
-        throw new Error("Error creating Stripe account.")
-      }
-
-      // If payment record exists, we update it with the new account id
-      if (payment) {
-        await db.update(payments).set({
-          stripeAccountId: account.id,
+      try {
+        const account = await stripe.accounts.create({ 
+          type: "standard",
+          metadata: {
+            storeId: input.storeId,
+            userId: userId
+          }
         })
-      } else {
-        await db.insert(payments).values({
-          storeId: input.storeId,
-          stripeAccountId: account.id,
-        })
-      }
 
-      return account.id
+        if (!account) {
+          throw new Error("Failed to create Stripe account")
+        }
+
+        // If payment record exists, we update it with the new account id
+        if (payment) {
+          await db.update(payments).set({
+            stripeAccountId: account.id,
+          })
+        } else {
+          await db.insert(payments).values({
+            storeId: input.storeId,
+            stripeAccountId: account.id,
+          })
+        }
+
+        return account.id
+      } catch (createError) {
+        console.error("Error creating Stripe account:", createError)
+        throw new Error("Failed to create Stripe account")
+      }
     }
   } catch (err) {
+    console.error("Error in createAccountLink:", err)
     return {
       data: null,
       error: getErrorMessage(err),

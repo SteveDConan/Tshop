@@ -53,12 +53,12 @@ export function SiteFooter() {
           <div className="flex-1 text-left text-sm leading-loose text-muted-foreground">
             Built by{" "}
             <Link
-              href="https://twitter.com/sadmann17"
+              href="https://twitter.com/"
               target="_blank"
               rel="noreferrer"
               className="font-semibold transition-colors hover:text-foreground"
             >
-              Sadman
+              SteveDuong-Dev
               <span className="sr-only">Twitter</span>
             </Link>
             .

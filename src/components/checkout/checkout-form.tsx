@@ -59,43 +59,47 @@ export function CheckoutForm({
             break
         }
       })
+      .catch((error) => {
+        console.error("Error retrieving payment intent:", error)
+        setMessage("Failed to retrieve payment status.")
+      })
   }, [stripe])
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
     if (!stripe || !elements) {
-      // Stripe.js hasn't yet loaded.
-      // Make sure to disable form submission until Stripe.js has loaded.
+      toast.error("Payment system is not ready. Please try again.")
       return
     }
 
     setIsLoading(true)
     setMessage(null)
 
-    const { error } = await stripe.confirmPayment({
-      //`Elements` instance that was used to create the Payment Element
-      elements,
-      confirmParams: {
-        return_url: absoluteUrl(`/checkout/${storeId}/success`),
-        receipt_email: email,
-      },
-    })
+    try {
+      const { error } = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: absoluteUrl(`/checkout/${storeId}/success`),
+          receipt_email: email,
+        },
+      })
 
-    // This point will only be reached if there is an immediate error when
-    // confirming the payment. Otherwise, your customer will be redirected to
-    // your `return_url`. For some payment methods like iDEAL, your customer will
-    // be redirected to an intermediate site first to authorize the payment, then
-    // redirected to the `return_url`.
-    if (error.type === "card_error" || error.type === "validation_error") {
-      setMessage(error.message ?? "Something went wrong, please try again.")
-    } else {
-      setMessage("Something went wrong, please try again.")
+      if (error) {
+        if (error.type === "card_error" || error.type === "validation_error") {
+          setMessage(error.message ?? "Something went wrong, please try again.")
+        } else {
+          setMessage("Something went wrong, please try again.")
+        }
+        toast.error(message)
+      }
+    } catch (err) {
+      console.error("Error confirming payment:", err)
+      setMessage("An unexpected error occurred. Please try again.")
+      toast.error("An unexpected error occurred. Please try again.")
+    } finally {
+      setIsLoading(false)
     }
-
-    toast.error(message)
-
-    setIsLoading(false)
   }
 
   return (
@@ -136,6 +140,11 @@ export function CheckoutForm({
         )}
         Pay
       </Button>
+      {message && (
+        <div className="text-sm text-red-500" role="alert">
+          {message}
+        </div>
+      )}
     </form>
   )
 }
