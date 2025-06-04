@@ -366,6 +366,7 @@ export async function getSaleCount(input: {
 
     return sales
   } catch (err) {
+    console.error("Error in getSaleCount:", err)
     return 0
   }
 }
@@ -379,7 +380,21 @@ export async function getSales(input: {
   try {
     const { storeId, fromDay, toDay } = input
 
-    return await db
+    // Get all months between fromDay and toDay
+    const months: { year: number; month: number }[] = []
+    if (fromDay && toDay) {
+      const currentDate = new Date(fromDay)
+      while (currentDate <= toDay) {
+        months.push({
+          year: currentDate.getFullYear(),
+          month: currentDate.getMonth() + 1,
+        })
+        currentDate.setMonth(currentDate.getMonth() + 1)
+      }
+    }
+
+    // Get sales data
+    const salesData = await db
       .select({
         year: sql`EXTRACT(YEAR FROM ${orders.createdAt})`.mapWith(Number),
         month: sql`EXTRACT(MONTH FROM ${orders.createdAt})`.mapWith(Number),
@@ -403,7 +418,26 @@ export async function getSales(input: {
         sql`EXTRACT(MONTH FROM ${orders.createdAt})`
       )
       .execute()
+
+    // Fill in missing months with zero sales
+    if (fromDay && toDay) {
+      const salesMap = new Map(
+        salesData.map((sale) => [
+          `${sale.year}-${sale.month}`,
+          sale.totalSales,
+        ])
+      )
+
+      return months.map(({ year, month }) => ({
+        year,
+        month,
+        totalSales: salesMap.get(`${year}-${month}`) ?? 0,
+      }))
+    }
+
+    return salesData
   } catch (err) {
+    console.error("Error in getSales:", err)
     return []
   }
 }
@@ -425,6 +459,7 @@ export async function getCustomers(input: {
           email: orders.email,
           name: orders.name,
           totalSpent: sql<number>`sum(${orders.amount})`,
+          lastOrderDate: sql<Date>`max(${orders.createdAt})`,
         })
         .from(orders)
         .limit(limit)
@@ -440,8 +475,8 @@ export async function getCustomers(input: {
               : undefined
           )
         )
-        .groupBy(orders.email, orders.name, orders.createdAt)
-        .orderBy(desc(orders.createdAt))
+        .groupBy(orders.email, orders.name)
+        .orderBy(desc(sql<number>`sum(${orders.amount})`))
 
       const customerCount = await tx
         .select({
@@ -470,6 +505,7 @@ export async function getCustomers(input: {
 
     return transaction
   } catch (err) {
+    console.error("Error in getCustomers:", err)
     return {
       customers: [],
       customerCount: 0,
